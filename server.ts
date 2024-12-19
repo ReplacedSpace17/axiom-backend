@@ -1,22 +1,85 @@
+// deno-lint-ignore-file
 import { Application } from "https://deno.land/x/oak@v12.6.0/mod.ts";
-import config from "./modules/configuration/config-axiom.ts"; // Importar el router desde config-axiom.ts
+import { Client } from "https://deno.land/x/mysql/mod.ts";
+import config from "./modules/configuration/config-axiom.ts"; // Rutas de configuración
 import login from "./modules/login/login.ts";
+import { oakCors } from "https://deno.land/x/cors/mod.ts";
+import { dbConnectionMiddleware } from "./utils/Middleware.ts";
 
+// Crear la aplicación
 const app = new Application();
 
-// Usar las rutas de configuración (config-axiom.ts)
+//cors
+app.use(
+  oakCors({
+    origin: "*", // Puedes restringir a ciertos dominios aquí si lo prefieres
+    methods: ["GET", "POST", "PUT", "DELETE"], // Métodos permitidos
+    allowedHeaders: ["Content-Type", "Authorization"], // Encabezados permitidos
+    optionsSuccessStatus: 200, // Para navegadores antiguos
+  })
+);
+app.use(dbConnectionMiddleware);
+// --------------------------------------- Usar las rutas de configuración (config-axiom.ts)
 app.use(config.routes());
 app.use(config.allowedMethods());
 
-//Usar las rutas de login (login.ts)
+// --------------------------------------- Usar las rutas de login (login.ts)
 app.use(login.routes());
 app.use(login.allowedMethods());
 
+// Función para cargar la configuración desde el archivo JSON
+async function loadDatabaseConfig() {
+  const data = await Deno.readTextFile("./env/database.json");
+  return JSON.parse(data);
+}
 
-// Definir un mensaje de bienvenida para rutas no especificadas
-app.use((ctx) => {
-  ctx.response.body = "¡Hola, Deno!";
+// Función principal que revisa el estado y conecta si es necesario
+async function monitorAndConnect() {
+  while (true) {
+    try {
+      // Cargar la configuración desde el archivo JSON en cada intento
+      const { server, port, username, password, database, state } = await loadDatabaseConfig();
+      
+      // Imprimir en consola la configuración de la base de datos
+      console.log("Credenciales:", { server, port, username, password, database, state });
+
+      if (state === false) {
+        console.log("La base de datos no está habilitada. Monitoreando el estado...");
+        await new Promise((resolve) => setTimeout(resolve, 3000)); // Espera 3 segundos antes de volver a comprobar
+        continue; // Si el estado es falso, vuelve a comprobar en 3 segundos
+      }
+
+      // Si el estado es true, intentar conectar a la base de datos
+      if (server && username && password && database) {
+        const client = await new Client().connect({
+          hostname: server,
+          username: username,
+          db: database,
+          password: password,
+        });
+
+        // Realizar un SELECT después de la conexión exitosa
+        const result = await client.query("SHOW TABLES;");
+        if (result.length > 0) {
+          console.log("Conexión exitosa a la base de datos.");
+          break; // Salir del bucle si la conexión es exitosa
+        }
+      } else {
+        console.error("Faltan configuraciones en el archivo database.json. Verifica tu configuración.");
+      }
+
+    } catch (error) {
+      console.error("Error al conectar a la base de datos. Reintentando en 5 segundos...");
+      console.error(error); // Imprimir todo el objeto de error
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // Esperar 5 segundos antes de intentar nuevamente
+    }
+  }
+}
+
+// Iniciar la función de monitoreo
+monitorAndConnect();
+
+// Iniciar el servidor
+await app.listen({ port: 8000 }).catch((err) => {
+  console.error("Error al iniciar el servidor", err);
 });
-
-console.log("Servidor escuchando en http://localhost:8000");
-await app.listen({ port: 8000 });
