@@ -39,7 +39,7 @@ async function monitorAndConnect() {
     try {
       // Cargar la configuración desde el archivo JSON en cada intento
       const { server, port, username, password, database, state } = await loadDatabaseConfig();
-      
+
       // Imprimir en consola la configuración de la base de datos
       console.log("Credenciales:", { server, port, username, password, database, state });
 
@@ -76,6 +76,7 @@ async function monitorAndConnect() {
   }
 }
 
+//
 // Iniciar la función de monitoreo
 monitorAndConnect();
 

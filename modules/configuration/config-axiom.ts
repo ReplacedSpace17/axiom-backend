@@ -6,7 +6,6 @@ import { dbConnectionMiddleware } from "../../utils/Middleware.ts"; // Importa e
 const config = new Router();
 
 //---------------------------------------------------------------------- Endpoints de configuración
-
 // Endpoint para el test de conexión a la base de datos -- (1.1)
 config.post("/config/test/db", async (ctx) => {
   var statusSQL= 0;
@@ -117,6 +116,7 @@ config.post("/config/set/superuser", dbConnectionMiddleware, async (ctx) => {
     // Obtener el cuerpo de la solicitud {"username": "admin", "password": "admin"}
     const requestBody = await ctx.request.body().value;
     const { username, password } = requestBody;
+    console.log("Cuerpo de la solicitud:", { username, password });
 
     if (!username || !password) {
       ctx.response.status = 400;
@@ -124,16 +124,26 @@ config.post("/config/set/superuser", dbConnectionMiddleware, async (ctx) => {
       return;
     }
 
-    // Hashear la contraseña
-    const hashedPassword = await hashPassword(password);
-    
-    // Obtener la fecha y hora actual
-    // Convertir la fecha a formato MySQL (YYYY-MM-DD HH:MM:SS)
-const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-
     // Obtener el cliente de la base de datos desde el middleware
     const client = ctx.state.dbClient;
+
+    // Verificar si ya existe un superusuario con el mismo username
+    const [existingUser] = await client.query(`
+      SELECT * FROM Accounts WHERE username = ? AND role = 'superuser'
+    `, [username]);
+
+    if (existingUser) {
+      console.log(">_Superusuario ya existente.");
+      ctx.response.status = 409; // Código HTTP 409: Conflicto
+      ctx.response.body = { message: "Ya existe un superusuario con este nombre de usuario." };
+      return;
+    }
+
+    // Hashear la contraseña
+    const hashedPassword = await hashPassword(password);
+
+    // Obtener la fecha y hora actual en formato MySQL (YYYY-MM-DD HH:MM:SS)
+    const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Realizar el INSERT en la base de datos
     const result = await client.query(`
@@ -142,7 +152,7 @@ const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
     `, [username, hashedPassword, 'superuser', dateTime]);
 
     // Verificar si la inserción fue exitosa
-    if (result) {
+    if (result.affectedRows === 1) {
       console.log(">_Nuevo superusuario creado exitosamente.");
       ctx.response.status = 200;
       ctx.response.body = { message: "Superusuario creado exitosamente." };
@@ -157,12 +167,13 @@ const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
   }
 });
 
-//Endpoint para crear laboratorios (2.2)
+//Endpoint para crear un nuevo laboratorio (3.1)
 config.post("/config/set/laboratory", dbConnectionMiddleware, async (ctx) => {
   try {
     // Obtener el cuerpo de la solicitud {"nombre": "Lab1", "investigador": "Dr. Smith"}
     const requestBody = await ctx.request.body().value;
     const { nombre, investigador } = requestBody;
+    console.log("Cuerpo de la solicitud:", { nombre, investigador });
 
     if (!nombre || !investigador) {
       ctx.response.status = 400;
@@ -170,11 +181,23 @@ config.post("/config/set/laboratory", dbConnectionMiddleware, async (ctx) => {
       return;
     }
 
-    // Obtener la fecha y hora actual
-    const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
     // Obtener el cliente de la base de datos desde el middleware
     const client = ctx.state.dbClient;
+
+    // Verificar si ya existe un laboratorio con el mismo nombre
+    const [existingLab] = await client.query(`
+      SELECT * FROM Laboratories WHERE nombre = ?
+    `, [nombre]);
+
+    if (existingLab) {
+      console.log(">_Laboratorio ya existente.");
+      ctx.response.status = 409; // Código HTTP 409: Conflicto
+      ctx.response.body = { message: "El laboratorio con este nombre ya existe." };
+      return;
+    }
+
+    // Obtener la fecha y hora actual
+    const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Realizar el INSERT en la base de datos
     const result = await client.query(`
@@ -183,10 +206,20 @@ config.post("/config/set/laboratory", dbConnectionMiddleware, async (ctx) => {
     `, [nombre, investigador, dateTime]);
 
     // Verificar si la inserción fue exitosa
-    if (result) {
+    if (result.affectedRows === 1) {
       console.log(">_Nuevo laboratorio creado exitosamente.");
+
+      // Consultar el registro recién creado (suponiendo que `id` es una columna autoincremental)
+      const [newLab] = await client.query(`
+        SELECT * FROM Laboratories
+        WHERE id = LAST_INSERT_ID()
+      `);
+
       ctx.response.status = 200;
-      ctx.response.body = { message: "Laboratorio creado exitosamente." };
+      ctx.response.body = {
+        message: "Laboratorio creado exitosamente.",
+        laboratorio: newLab, // Devolvemos el registro recién creado
+      };
     } else {
       ctx.response.status = 500;
       ctx.response.body = { message: "Error al crear el laboratorio." };
@@ -198,7 +231,7 @@ config.post("/config/set/laboratory", dbConnectionMiddleware, async (ctx) => {
   }
 });
 
-//Endpoint obtener todos los laboratorios (2.3)
+//Endpoint OBTENER todos los laboratorios (3.2)
 config.get("/config/get/laboratories", dbConnectionMiddleware, async (ctx) => {
   try {
     // Obtener el cliente de la base de datos desde el middleware
@@ -223,12 +256,14 @@ config.get("/config/get/laboratories", dbConnectionMiddleware, async (ctx) => {
   }
 });
 
-//Endpoint para crear un nuevo usuario (3.4)
+//Endpoint para crear un nuevo usuario (4.1)
 config.post("/config/set/user", dbConnectionMiddleware, async (ctx) => {
   try {
     // Obtener el cuerpo de la solicitud {"username": "admin", "password": "admin", "lab_id": 1}
     const requestBody = await ctx.request.body().value;
     const { username, password, lab_id } = requestBody;
+
+    console.log("Cuerpo de la solicitud:", { username, password, lab_id });
 
     if (!username || !password || !lab_id) {
       ctx.response.status = 400;
@@ -236,14 +271,29 @@ config.post("/config/set/user", dbConnectionMiddleware, async (ctx) => {
       return;
     }
 
+    // Obtener el cliente de la base de datos desde el middleware
+    const client = ctx.state.dbClient;
+
+    // Verificar si el usuario ya existe
+    const existingUser = await client.query(`
+      SELECT * FROM Accounts WHERE username = ?
+    `, [username]);
+
+    if (existingUser.length > 0) {
+      ctx.response.status = 409; // HTTP 409 Conflict
+      ctx.response.body = { message: `El usuario '${username}' ya existe.` };
+      console.log(">_El usuario ya existe.");
+      return;
+    }
+
     // Hashear la contraseña
     const hashedPassword = await hashPassword(password);
-    
+
     // Obtener la fecha y hora actual en formato MySQL (YYYY-MM-DD HH:MM:SS)
     const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    // Obtener el cliente de la base de datos desde el middleware
-    const client = ctx.state.dbClient;
+    // Imprimir valores a guardar
+    console.log("Valores a guardar:", { username, hashedPassword, lab_id, dateTime });
 
     // Realizar el INSERT en la tabla Accounts
     const result = await client.query(`
@@ -253,20 +303,27 @@ config.post("/config/set/user", dbConnectionMiddleware, async (ctx) => {
 
     // Verificar si la inserción fue exitosa
     if (result) {
-      // Obtener el ID del usuario recién insertado
-      const { insertId } = result;
+      const [newUser] = await client.query(`
+        SELECT * FROM Accounts WHERE id = LAST_INSERT_ID()
+      `);
+      const { id } = newUser;
+
+      console.log("ID del usuario insertado:", id);
 
       // Realizar el INSERT en la tabla Laboratory_Accounts para la relación
       const relationResult = await client.query(`
         INSERT INTO Laboratory_Accounts (id_laboratory, id_account)
         VALUES (?, ?)
-      `, [lab_id, insertId]);
+      `, [lab_id, id]);
 
       // Verificar si la relación fue insertada exitosamente
       if (relationResult) {
         console.log(">_Nuevo usuario creado y asociado al laboratorio.");
         ctx.response.status = 200;
-        ctx.response.body = { message: "Usuario creado y asociado al laboratorio exitosamente." };
+        ctx.response.body = {
+          message: "Usuario creado y asociado al laboratorio exitosamente.",
+          usuario: { id, username, lab_id, dateTime },
+        };
       } else {
         ctx.response.status = 500;
         ctx.response.body = { message: "Error al asociar el usuario al laboratorio." };
@@ -282,7 +339,7 @@ config.post("/config/set/user", dbConnectionMiddleware, async (ctx) => {
   }
 });
 
-//Endpoint para guardar informacion del instituto (4.1)
+//Endpoint para guardar informacion del instituto (5.1)
 config.post("/config/set/institute", dbConnectionMiddleware, async (ctx) => {
   try {
     // Get the request body
@@ -290,6 +347,7 @@ config.post("/config/set/institute", dbConnectionMiddleware, async (ctx) => {
 
     // Destructure the request body to get the institute details
     const { name, city, state, country } = requestBody;
+    console.log("Request body:", { name, city, state, country });
 
     // Validate required fields
     if (!name || !city || !state || !country) {
@@ -298,11 +356,22 @@ config.post("/config/set/institute", dbConnectionMiddleware, async (ctx) => {
       return;
     }
 
-    // Get the current date and time (in MySQL format)
-    const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
     // Get the database client from the middleware
     const client = ctx.state.dbClient;
+
+    // Check if an institute with the same name and city already exists
+    const checkResult = await client.query(`
+      SELECT * FROM Institute WHERE name = ? AND city = ?
+    `, [name, city]);
+
+    if (checkResult.length > 0) {
+      ctx.response.status = 409;
+      ctx.response.body = { message: "Ya has registrado un instrituto con el mismo nombre" };
+      return;
+    }
+
+    // Get the current date and time (in MySQL format)
+    const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Insert the new institute into the database
     const result = await client.query(`
@@ -314,7 +383,7 @@ config.post("/config/set/institute", dbConnectionMiddleware, async (ctx) => {
     if (result) {
       console.log(">_New institute created successfully.");
       ctx.response.status = 200;
-      ctx.response.body = { message: "Institute created successfully." };
+      ctx.response.body = { message: "Información registrada correctamente" };
     } else {
       ctx.response.status = 500;
       ctx.response.body = { message: "Error while creating the institute." };
