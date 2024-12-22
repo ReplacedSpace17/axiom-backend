@@ -80,6 +80,8 @@ async function monitorAndConnect() {
 // Iniciar la función de monitoreo
 monitorAndConnect();
 
+//Iniciar el nodo ipfs
+
 // Iniciar el servidor
 await app.listen({ port: 8000 }).catch((err) => {
   console.error("Error al iniciar el servidor", err);

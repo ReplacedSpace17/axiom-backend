@@ -1,6 +1,7 @@
 {
     "imports": {
-      "oak/": "https://deno.land/x/oak@v12.6.0/"
+      "oak/": "https://deno.land/x/oak@v12.6.0/",
+       "just-safe-set": "https://cdn.skypack.dev/just-safe-set"
     }
   }
   
