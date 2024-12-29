@@ -8,7 +8,8 @@ const config = new Router();
 //---------------------------------------------------------------------- Endpoints de configuración
 // Endpoint para el test de conexión a la base de datos -- (1.1)
 config.post("/config/test/db", async (ctx) => {
-  var statusSQL= 0;
+  console.log("Endpoint de prueba de conexión a la base de datos.");
+  var statusSQL = 0;
   try {
     // Recibir los datos de configuración desde el body
     const body = await ctx.request.body().value;
@@ -27,18 +28,18 @@ config.post("/config/test/db", async (ctx) => {
     const result = await client.query("SHOW TABLES;");
     if (result.length > 0) {
       console.log("---------------------------- Conexion exitosa ----------------------------");
-      statusSQL=200;
+      statusSQL = 200;
       ctx.response.body = { success: true, message: "Conexión exitosa a la base de datos." };
     }
-    else{
+    else {
       console.log("---------------------------- Conexion fallida ----------------------------");
-      statusSQL=500;
+      statusSQL = 500;
       ctx.response.body = { success: false, message: "Conexión fallida a la base de datos." };
     }
     // Si la conexión es exitosa, cerramos la conexión y respondemos
     await client.close();
     ctx.response.status = statusSQL;
-    
+
 
   } catch (error) {
     console.error("Error al conectar a la base de datos:", error);
@@ -52,7 +53,7 @@ config.post("/config/set/state", async (ctx) => {
   try {
     // Leer el cuerpo de la solicitud
     const requestBody = await ctx.request.body().value;
-    
+
     // Verificar que los datos recibidos son correctos
     const { server, port, username, password, database } = requestBody;
     if (!server || !port || !username || !password || !database) {
@@ -63,7 +64,7 @@ config.post("/config/set/state", async (ctx) => {
 
     // Ruta del archivo de configuración
     const filePath = "./env/database.json";
-    
+
     // Verificar si el archivo existe
     try {
       await Deno.stat(filePath); // Verifica si el archivo existe

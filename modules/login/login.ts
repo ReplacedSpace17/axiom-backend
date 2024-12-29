@@ -52,7 +52,8 @@ login.post("/login/user", dbConnectionMiddleware, async (ctx) => {
 
     // Devolver el token como respuesta
     ctx.response.status = 200;
-    ctx.response.body = { message: "Login successful", token: token };
+    console.log("User logged in:", user.username, 'with id:', user.id, 'and token:', token, 'rol: user');
+    ctx.response.body = { message: "Se ha inciado sesión correctamente", token: token, userId: user.id, rol: 'admin' };
   } catch (error) {
     console.error("Error during login:", error);
     ctx.response.status = 500;

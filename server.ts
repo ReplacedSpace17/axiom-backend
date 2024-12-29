@@ -18,7 +18,17 @@ app.use(
     optionsSuccessStatus: 200, // Para navegadores antiguos
   })
 );
-app.use(dbConnectionMiddleware);
+
+
+// Aplicar el middleware a todas las rutas excepto los endpoints especificados
+app.use(async (ctx, next) => {
+  const excludedPaths = ["/config/test/db", "/config/set/state"];
+  if (excludedPaths.includes(ctx.request.url.pathname)) {
+    await next();
+  } else {
+    await dbConnectionMiddleware(ctx, next);
+  }
+});
 // --------------------------------------- Usar las rutas de configuración (config-axiom.ts)
 app.use(config.routes());
 app.use(config.allowedMethods());

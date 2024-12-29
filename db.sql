@@ -52,3 +52,5 @@ CREATE TABLE Institute (
 -- Usuario
 CREATE USER 'deno'@'localhost' IDENTIFIED BY 'MiBackend';
 GRANT ALL PRIVILEGES ON axiom_db.* TO 'deno'@'localhost';
+
+Flush PRIVILEGES;

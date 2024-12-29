@@ -3,6 +3,6 @@
   "port": 3306,
   "username": "deno",
   "password": "MiBackend",
-  "database": "axiom",
+  "database": "axiom_db",
   "state": true
 }
