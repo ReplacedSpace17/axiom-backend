@@ -1,20 +1,36 @@
-import { create } from "https://deno.land/x/djwt/mod.ts";
+import { create, verify, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
-// Función para crear el token JWT
-const createToken = async (userId: number): Promise<string> => {
-  const secretKey = "your-secret-key";  // Usa una clave secreta segura (reemplaza por algo más seguro en producción)
+// Generar una clave HMAC segura
+async function generateKey(): Promise<CryptoKey> {
+  return await crypto.subtle.generateKey(
+    { name: "HMAC", hash: "SHA-512" },
+    true, // La clave será exportable
+    ["sign", "verify"]
+  );
+}
 
-  // Payload del JWT
+// Función para crear un token
+export async function createToken(userId: string) {
+  const key = await generateKey(); // Generamos la clave HMAC
   const payload = {
-    sub: userId,  // ID del usuario
-    iat: Math.floor(Date.now() / 1000),  // Fecha de emisión (en segundos desde el epoch)
-    exp: Math.floor(Date.now() / 1000) + 3600,  // Fecha de expiración (1 hora después)
+    sub: userId, // 'sub' (subject) se usa comúnmente para almacenar el ID del usuario
+    iat: getNumericDate(new Date()), // Fecha de emisión en formato NumericDate
+    exp: getNumericDate(60 * 60), // El token expira en 1 hora
   };
 
-  // Crear y firmar el token JWT
-  const jwt = await create({ alg: "HS256", typ: "JWT" }, payload, secretKey);
+  const header = { alg: "HS512", typ: "JWT" };
+  const jwt = await create(header, payload, key); // Generamos el token JWT
+  return jwt;
+}
 
-  return jwt;  // Retornar el token
-};
-
-export { createToken };
+// Función para verificar un token
+export async function verifyToken(token: string) {
+  const key = await generateKey(); // Usamos la misma clave HMAC para verificar el token
+  try {
+    const decoded = await verify(token, key); // Verificamos el token
+    return decoded; // Retornamos el payload decodificado
+  } catch (error) {
+    console.error("Error de verificación de token:", error);
+    throw new Error("Token inválido o expirado");
+  }
+}

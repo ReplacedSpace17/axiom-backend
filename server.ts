@@ -6,6 +6,8 @@ import login from "./modules/login/login.ts";
 import { oakCors } from "https://deno.land/x/cors/mod.ts";
 import { dbConnectionMiddleware } from "./utils/Middleware.ts";
 
+import test from "./modules/configuration/test.ts";
+
 // Crear la aplicación
 const app = new Application();
 
@@ -22,13 +24,19 @@ app.use(
 
 // Aplicar el middleware a todas las rutas excepto los endpoints especificados
 app.use(async (ctx, next) => {
-  const excludedPaths = ["/config/test/db", "/config/set/state"];
+  const excludedPaths = ["/config/test/db", "/config/set/state", "/axiom/test"];
   if (excludedPaths.includes(ctx.request.url.pathname)) {
     await next();
   } else {
     await dbConnectionMiddleware(ctx, next);
   }
 });
+
+// --------------------------------------- Usar las rutas de configuración (config-axiom.ts)
+app.use(test.routes());
+app.use(test.allowedMethods());
+
+
 // --------------------------------------- Usar las rutas de configuración (config-axiom.ts)
 app.use(config.routes());
 app.use(config.allowedMethods());

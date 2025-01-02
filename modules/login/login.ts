@@ -8,6 +8,7 @@ const login = new Router();
 
 // POST /login para autenticar un usuario
 login.post("/login/user", dbConnectionMiddleware, async (ctx) => {
+  console.log("Login endpoint hit");
   try {
     // Obtener el cuerpo de la solicitud (username y password)
     const requestBody = await ctx.request.body().value;
@@ -22,9 +23,9 @@ login.post("/login/user", dbConnectionMiddleware, async (ctx) => {
     // Obtener el cliente de la base de datos desde el middleware
     const client = ctx.state.dbClient;
 
-    // Buscar el usuario por username en la base de datos
+    // Buscar el usuario por username en la base de datos (incluye 'role')
     const users = await client.query(`
-      SELECT id, username, password FROM Accounts WHERE username = ?
+      SELECT id, username, password, role FROM Accounts WHERE username = ?
     `, [username]);
 
     // Si el usuario no existe
@@ -48,17 +49,29 @@ login.post("/login/user", dbConnectionMiddleware, async (ctx) => {
     }
 
     // Si la contraseña es válida, generar un token JWT
-    const token = createToken(user.id); // Esta función crea el token con el ID del usuario
+  // Llamar a createToken usando await
+  console.log(user); 
+  //convertir
+const token = await createToken(user.id);  // Usar await aquí para esperar el token
 
-    // Devolver el token como respuesta
+
+    // Devolver el token y el rol como respuesta
     ctx.response.status = 200;
-    console.log("User logged in:", user.username, 'with id:', user.id, 'and token:', token, 'rol: user');
-    ctx.response.body = { message: "Se ha inciado sesión correctamente", token: token, userId: user.id, rol: 'admin' };
+    console.log("User logged in:", user.username, 'with id:', user.id, 'and token:', token, 'role:', user.role);
+    ctx.response.body = { 
+      message: "Se ha iniciado sesión correctamente", 
+      token: token, 
+      userId: user.id, 
+      role: user.role,
+      username: user.username
+    };
   } catch (error) {
     console.error("Error during login:", error);
     ctx.response.status = 500;
     ctx.response.body = { message: "Internal server error" };
   }
 });
+
+export { login };
 
 export default login;
