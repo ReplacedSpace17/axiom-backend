@@ -2,7 +2,7 @@ import { Router } from "https://deno.land/x/oak@v12.6.0/mod.ts";
 import { Client } from "https://deno.land/x/mysql/mod.ts";
 import { hashPassword, comparePassword } from "../../utils/Hash.ts"; // Importa la función de hash
 import { dbConnectionMiddleware } from "../../utils/Middleware.ts"; // Importa el middleware de conexión a la base de datos
-import {createToken} from "../../utils/Token.ts"; // Importa la función para crear el token
+import {createToken, verifyToken} from "../../utils/Token.ts"; // Importa la función para crear el token
 
 const login = new Router();
 
@@ -72,6 +72,39 @@ const token = await createToken(user.id);  // Usar await aquí para esperar el t
   }
 });
 
-export { login };
+// POST /login/session para verificar la sesión activa
+login.post("/login/session", async (ctx) => {
+  console.log("Session verification endpoint hit");
+  try {
+    const requestBody = await ctx.request.body().value;
+    const { token } = requestBody;
+
+    if (!token) {
+      ctx.response.status = 400;
+      ctx.response.body = { message: "Missing 'token'." };
+      return;
+    }
+
+    try {
+      const isValid = await verifyToken(token); // Verifica el token
+
+      if (isValid) {
+        ctx.response.status = 200;
+        ctx.response.body = { session: true };
+      } else {
+        ctx.response.status = 401;
+        ctx.response.body = { session: false };
+      }
+    } catch (error) {
+      console.error("Invalid token:", error);
+      ctx.response.status = 401;
+      ctx.response.body = { session: false };
+    }
+  } catch (error) {
+    console.error("Error during session verification:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { message: "Internal server error" };
+  }
+});
 
 export default login;
