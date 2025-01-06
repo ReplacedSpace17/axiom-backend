@@ -173,19 +173,51 @@ home_admin.post("/su/laboratorios", async (context) => {
 });
 
 //------------------------------------------------- USUARIOS -------------------------------------------------
-//Endpoint para obtener la lista de usuarios
-home_admin.get("/su/usuarios", (context) => {
-    context.response.body = "Lista de usuarios";
+home_admin.get("/su/usuarios", async (context) => {
+    try {
+        // Obtener el cliente de la base de datos desde el middleware
+        const client = context.state.dbClient;
+
+        // Consulta para obtener usuarios con rol "user" y sus laboratorios asociados
+        const result = await client.query(`
+            SELECT 
+                Accounts.id AS user_id,
+                Accounts.username,
+                Laboratories.id AS lab_id,
+                Laboratories.nombre AS lab_name
+            FROM Accounts
+            LEFT JOIN Laboratory_Accounts ON Accounts.id = Laboratory_Accounts.id_account
+            LEFT JOIN Laboratories ON Laboratory_Accounts.id_laboratory = Laboratories.id
+            WHERE Accounts.role = 'user';
+        `);
+
+        // Formatear los datos para devolver un array de usuarios
+        const usuarios = result.map((row: { user_id: any; username: any; lab_id: any; lab_name: any; }) => ({
+            id: row.user_id,
+            username: row.username,
+            laboratorio: row.lab_id ? { id: row.lab_id, nombre: row.lab_name } : null
+        }));
+
+        // Responder con la lista de usuarios
+        context.response.status = 200;
+        context.response.body = usuarios;
+    } catch (e) {
+        console.error("Error al obtener la lista de usuarios:", e);
+        context.response.status = 500;
+        context.response.body = { error: "Error interno del servidor." };
+    }
 });
 
 //Modificar usuarios
 home_admin.put("/su/usuarios", (context) => {
     context.response.body = "Modificar la lista de usuarios";
 });
+
 //Eliminar usuarios
 home_admin.delete("/su/usuarios", (context) => {
     context.response.body = "Eliminar la lista de usuarios";
 });
+
 //Agregar usuarios
 home_admin.post("/su/usuarios", (context) => {
     context.response.body = "Agregar usuarios";
