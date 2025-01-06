@@ -9,7 +9,7 @@ CREATE TABLE Accounts (
     id INT AUTO_INCREMENT PRIMARY KEY,  -- ID autoincremental como clave primaria
     username VARCHAR(255) NOT NULL,     -- Columna para el nombre de usuario
     password VARCHAR(255) NOT NULL,     -- Columna para la contraseña
-    role VARCHAR(50) NOT NULL,          -- Columna para el rol
+    role VARCHAR(50) NOT NULL,          -- Columna para el rol (superuser or user)
     date_time DATETIME DEFAULT CURRENT_TIMESTAMP  -- Columna para la fecha y hora de creación, con valor por defecto
 );
 

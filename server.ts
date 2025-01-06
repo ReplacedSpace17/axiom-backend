@@ -7,6 +7,7 @@ import { oakCors } from "https://deno.land/x/cors/mod.ts";
 import { dbConnectionMiddleware } from "./utils/Middleware.ts";
 
 import test from "./modules/configuration/test.ts";
+import home_admin from "./modules/admin/home_admin.ts";
 
 // Crear la aplicación
 const app = new Application();
@@ -44,6 +45,9 @@ app.use(config.allowedMethods());
 // --------------------------------------- Usar las rutas de login (login.ts)
 app.use(login.routes());
 app.use(login.allowedMethods());
+//--------------------------------------- Usar las rutas de Home Admin (home_admin.ts)
+app.use(home_admin.routes());
+app.use(home_admin.allowedMethods());
 
 // Función para cargar la configuración desde el archivo JSON
 async function loadDatabaseConfig() {
