@@ -49,6 +49,15 @@ CREATE TABLE Institute (
     date DATETIME DEFAULT CURRENT_TIMESTAMP -- Column for the date with a default value of the current timestamp
 );
 
+-- Crear la tabla para registrar los CID y el id del estudiante
+CREATE TABLE Experiments (
+    id INT AUTO_INCREMENT PRIMARY KEY,  -- ID autoincremental como clave primaria
+    id_student INT NOT NULL,            -- ID del estudiante
+    id_laboratory INT NOT NULL,         -- ID del laboratorio
+    cid VARCHAR(255) NOT NULL,          -- Columna para el CID
+    fecha DATETIME DEFAULT CURRENT_TIMESTAMP -- Columna para la fecha con valor por defecto
+);
+
 -- Usuario
 CREATE USER 'deno'@'localhost' IDENTIFIED BY 'MiBackend';
 GRANT ALL PRIVILEGES ON axiom_db.* TO 'deno'@'localhost';

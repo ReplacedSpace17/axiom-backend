@@ -1,7 +1,7 @@
 // deno-lint-ignore-file
 import { Router } from "https://deno.land/x/oak@v12.6.0/mod.ts";
 import { dbConnectionMiddleware } from "../../utils/Middleware.ts"; // Importa el middleware de conexión a la base de datos
-
+import {hashPassword} from "../../utils/Hash.ts"; // Importa la función para hashear contraseñas
 const home_admin = new Router();
 
 //------------------------------------------------- LABORAORIOS -------------------------------------------------
@@ -173,40 +173,35 @@ home_admin.post("/su/laboratorios", async (context) => {
 });
 
 //------------------------------------------------- USUARIOS -------------------------------------------------
-home_admin.get("/su/usuarios", async (context) => {
+home_admin.get("/su/usuarios", dbConnectionMiddleware, async (ctx) => {
     try {
-        // Obtener el cliente de la base de datos desde el middleware
-        const client = context.state.dbClient;
-
-        // Consulta para obtener usuarios con rol "user" y sus laboratorios asociados
-        const result = await client.query(`
-            SELECT 
-                Accounts.id AS user_id,
-                Accounts.username,
-                Laboratories.id AS lab_id,
-                Laboratories.nombre AS lab_name
-            FROM Accounts
-            LEFT JOIN Laboratory_Accounts ON Accounts.id = Laboratory_Accounts.id_account
-            LEFT JOIN Laboratories ON Laboratory_Accounts.id_laboratory = Laboratories.id
-            WHERE Accounts.role = 'user';
-        `);
-
-        // Formatear los datos para devolver un array de usuarios
-        const usuarios = result.map((row: { user_id: any; username: any; lab_id: any; lab_name: any; }) => ({
-            id: row.user_id,
-            username: row.username,
-            laboratorio: row.lab_id ? { id: row.lab_id, nombre: row.lab_name } : null
-        }));
-
-        // Responder con la lista de usuarios
-        context.response.status = 200;
-        context.response.body = usuarios;
-    } catch (e) {
-        console.error("Error al obtener la lista de usuarios:", e);
-        context.response.status = 500;
-        context.response.body = { error: "Error interno del servidor." };
+      // Obtener el cliente de la base de datos desde el middleware
+      const client = ctx.state.dbClient;
+  
+      // Consultar los usuarios con sus laboratorios
+      const users = await client.query(`
+        SELECT A.id, A.username, A.date_time, L.nombre as laboratorio, L.id AS lab_id
+        FROM Accounts A
+        JOIN Laboratory_Accounts LA ON A.id = LA.id_account
+        JOIN Laboratories L ON LA.id_laboratory = L.id
+      `);
+  
+      if (users.length === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { message: "No se encontraron usuarios." };
+        return;
+      }
+  
+      // Enviar la respuesta con los usuarios
+      ctx.response.status = 200;
+      ctx.response.body = { usuarios: users };
+    } catch (error) {
+      console.error("Error al obtener los usuarios:", error);
+      ctx.response.status = 500;
+      ctx.response.body = { message: "Error interno del servidor." };
     }
-});
+  });
+  
 
 //Modificar usuarios
 home_admin.put("/su/usuarios", (context) => {
@@ -214,14 +209,119 @@ home_admin.put("/su/usuarios", (context) => {
 });
 
 //Eliminar usuarios
-home_admin.delete("/su/usuarios", (context) => {
-    context.response.body = "Eliminar la lista de usuarios";
+home_admin.delete("/su/usuarios/:id", dbConnectionMiddleware, async (ctx) => {
+  const { id } = ctx.params; // Obtener el id desde los parámetros de la URL
+  const client = ctx.state.dbClient;
+
+  try {
+      // Eliminar la relación entre el estudiante y los laboratorios
+      await client.query("DELETE FROM Laboratory_Accounts WHERE id_account = ?", [id]);
+
+      // Eliminar el estudiante de la tabla Students
+      await client.query("DELETE FROM Students WHERE id_accounts = ?", [id]);
+
+      // Eliminar la cuenta del estudiante en la tabla Accounts
+      const result = await client.query("DELETE FROM Accounts WHERE id = ?", [id]);
+
+      // Verificar si se eliminó la cuenta
+      if (result.affectedRows === 0) {
+          ctx.response.status = 404;
+          ctx.response.body = { message: "No se encontró el usuario con el id proporcionado" };
+          return;
+      }
+
+      ctx.response.status = 200;
+      ctx.response.body = { message: "Estudiante y cuenta eliminados con éxito" };
+  } catch (error) {
+      console.error("Error eliminando el estudiante:", error);
+      ctx.response.status = 500;
+      ctx.response.body = { message: "Error en el servidor al eliminar el estudiante" };
+  }
 });
 
-//Agregar usuarios
-home_admin.post("/su/usuarios", (context) => {
-    context.response.body = "Agregar usuarios";
-});
 
+
+//Endpoint para crear un nuevo usuario (4.1)
+home_admin.post("/su/usuarios", dbConnectionMiddleware, async (ctx) => {
+  try {
+    // Obtener el cuerpo de la solicitud {"username": "admin", "password": "admin", "lab_id": 1}
+    const requestBody = await ctx.request.body().value;
+    const { username, password, lab_id } = requestBody;
+
+    console.log("Cuerpo de la solicitud:", { username, password, lab_id });
+
+    if (!username || !password || !lab_id) {
+      ctx.response.status = 400;
+      ctx.response.body = { message: "Faltan los parámetros 'username', 'password' o 'lab_id'." };
+      return;
+    }
+
+    // Obtener el cliente de la base de datos desde el middleware
+    const client = ctx.state.dbClient;
+
+    // Verificar si el usuario ya existe
+    const existingUser = await client.query(`
+      SELECT * FROM Accounts WHERE username = ?
+    `, [username]);
+
+    if (existingUser.length > 0) {
+      ctx.response.status = 409; // HTTP 409 Conflict
+      ctx.response.body = { message: `El usuario '${username}' ya existe.` };
+      console.log(">_El usuario ya existe.");
+      return;
+    }
+
+    // Hashear la contraseña
+    const hashedPassword = await hashPassword(password);
+
+    // Obtener la fecha y hora actual en formato MySQL (YYYY-MM-DD HH:MM:SS)
+    const dateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    // Imprimir valores a guardar
+    console.log("Valores a guardar:", { username, hashedPassword, lab_id, dateTime });
+
+    // Realizar el INSERT en la tabla Accounts
+    const result = await client.query(`
+      INSERT INTO Accounts (username, password, role, date_time)
+      VALUES (?, ?, ?, ?)
+    `, [username, hashedPassword, 'user', dateTime]);
+
+    // Verificar si la inserción fue exitosa
+    if (result) {
+      const [newUser] = await client.query(`
+        SELECT * FROM Accounts WHERE id = LAST_INSERT_ID()
+      `);
+      const { id } = newUser;
+
+      console.log("ID del usuario insertado:", id);
+
+      // Realizar el INSERT en la tabla Laboratory_Accounts para la relación
+      const relationResult = await client.query(`
+        INSERT INTO Laboratory_Accounts (id_laboratory, id_account)
+        VALUES (?, ?)
+      `, [lab_id, id]);
+
+      // Verificar si la relación fue insertada exitosamente
+      if (relationResult) {
+        console.log(">_Nuevo usuario creado y asociado al laboratorio.");
+        ctx.response.status = 200;
+        ctx.response.body = {
+          message: "Usuario creado y asociado al laboratorio exitosamente.",
+          usuario: { id, username, lab_id, dateTime },
+        };
+      } else {
+        ctx.response.status = 500;
+        ctx.response.body = { message: "Error al asociar el usuario al laboratorio." };
+      }
+    } else {
+      ctx.response.status = 500;
+      ctx.response.body = { message: "Error al crear el usuario." };
+    }
+  } catch (error) {
+    console.error("Error al procesar las credenciales:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { message: "Error interno del servidor." };
+  }
+});
 
 export default home_admin;

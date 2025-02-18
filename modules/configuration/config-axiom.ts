@@ -2,6 +2,9 @@ import { Router } from "https://deno.land/x/oak@v12.6.0/mod.ts";
 import { Client } from "https://deno.land/x/mysql/mod.ts";
 import { hashPassword } from "../../utils/Hash.ts"; // Importa la función de hash
 import { dbConnectionMiddleware } from "../../utils/Middleware.ts"; // Importa el middleware de conexión a la base de datos
+import IPFS from "../../utils/IPFS.ts";  // Correcto: sin las llaves
+
+import { join } from "https://deno.land/std@0.207.0/path/mod.ts";
 
 const config = new Router();
 
@@ -419,5 +422,142 @@ config.post("/test", dbConnectionMiddleware, async (ctx) => {
     ctx.response.body = { message: "Error al ejecutar la consulta SHOW TABLES." };
   }
 });
+
+// Endpoint para probar conexion con IPFS 
+config.post("/config/ipfs/test", async (ctx) => {
+  //bajar del body el ip
+  const body = await ctx.request.body().value;
+  const { host } = body;
+  const ipfsNode = new IPFS(host);
+  const cid_test = await ipfsNode.test();
+  //varificar si el cid es null
+  if (cid_test == null) {
+    ctx.response.status = 500;
+    ctx.response.body = { message: "Error al subir el archivo a IPFS" };
+    return;
+  }
+  if (cid_test != null) {
+    ctx.response.status = 200;
+    ctx.response.body = { cid: cid_test };
+  }
+});
+
+//Endpoint para guardar los host de ipfs
+config.post("/config/host", async (ctx) => {
+  try {
+    // Obtener el body de la petición
+    const body = await ctx.request.body().value;
+    const { host_ipfs, host_blockchain_controller } = body;
+
+    // Ruta del archivo
+    const filePath = join(Deno.cwd(), "env", "config_host_requirements.json");
+
+    // Leer el archivo existente
+    let configData = {};
+    try {
+      const fileContent = await Deno.readTextFile(filePath);
+      configData = JSON.parse(fileContent);
+    } catch (error) {
+      console.warn("Archivo no encontrado o JSON inválido, creando uno nuevo.");
+    }
+
+    // Modificar los valores
+    configData.host_ipfs_node = host_ipfs;
+    configData.host_blockchain_controller = host_blockchain_controller;
+
+    // Guardar los cambios en el archivo
+    await Deno.writeTextFile(filePath, JSON.stringify(configData, null, 2));
+
+    ctx.response.status = 200;
+    ctx.response.body = { message: "Configuración actualizada correctamente" };
+  } catch (error) {
+    ctx.response.status = 500;
+    ctx.response.body = { error: "Error al actualizar configuración", details: error.message };
+  }
+});
+
+config.post("/config/wallet", async (ctx) => {
+  try {
+    // Obtener los datos del body
+    const body = await ctx.request.body().value;
+    const { addressWallet, alchemyApiKey, privateKey } = body;
+    
+    console.log("Cuerpo de la solicitud:", { addressWallet, alchemyApiKey, privateKey });
+
+    // Ruta del archivo de configuración
+    const filePath = join(Deno.cwd(), "env", "config_host_requirements.json");
+
+    // Leer el archivo de configuración
+    let configData = {};
+    try {
+      const fileContent = await Deno.readTextFile(filePath);
+      configData = JSON.parse(fileContent);
+    } catch (error) {
+      console.error("Error al leer el archivo de configuración:", error);
+      ctx.response.status = 500;
+      ctx.response.body = { error: "Error al leer configuración" };
+      return;
+    }
+
+    // Obtener el valor de host_blockchain_controller
+    const hostBlockchainController = configData.host_blockchain_controller;
+    
+    // Hacer un POST a /blockchain/wallet/balance
+    const response = await fetch(`${hostBlockchainController}/blockchain/wallet/balance`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ addressWallet, alchemyApiKey }),
+    });
+
+    // Verificar si la respuesta fue exitosa (código 200)
+    if (response.ok) {
+      const responseData = await response.json(); // Convertir respuesta a JSON
+      console.log("Response Data:", responseData); // Imprimir la respuesta completa
+
+      // Extraer el balance de la respuesta
+      const balanceMatic = responseData.balance;
+
+      // Si el balance es menor a 1 MATIC, enviar un mensaje de error
+      if (balanceMatic < 1) {
+        ctx.response.status = 400;
+        ctx.response.body = { message: "No tiene suficiente Matic en la wallet" };
+        return;
+      }
+
+      // **Guardar los datos en el archivo de configuración**
+      configData.addressWallet = addressWallet;
+      configData.alchemyApiKey = alchemyApiKey;
+      configData.privateKey = privateKey;
+
+      try {
+        await Deno.writeTextFile(filePath, JSON.stringify(configData, null, 2));
+        console.log("Archivo de configuración actualizado correctamente.");
+      } catch (writeError) {
+        console.error("Error al escribir en el archivo de configuración:", writeError);
+        ctx.response.status = 500;
+        ctx.response.body = { error: "Error al guardar configuración" };
+        return;
+      }
+
+      // Enviar respuesta con balance
+      ctx.response.status = 200;
+      ctx.response.body = {
+        message: "Wallet conectada. Saldo disponible: " + balanceMatic + " MATIC",
+        balance: balanceMatic,
+      };
+    } else {
+      // Si la solicitud a blockchain falla
+      ctx.response.status = 500;
+      ctx.response.body = { error: "Error al obtener el balance de la wallet" };
+    }
+
+  } catch (error) {
+    ctx.response.status = 500;
+    ctx.response.body = { error: "Error al procesar la solicitud", details: error.message };
+  }
+});
+
 
 export default config;
