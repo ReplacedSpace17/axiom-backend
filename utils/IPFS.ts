@@ -52,6 +52,50 @@ class IPFS {
       return null;
     }
   }
+
+  async uploadDirectory(directoryPath: string): Promise<string> {
+    const formData = new FormData();
+    const files = await this.getFilesInDirectory(directoryPath);
+  
+    for (const file of files) {
+      formData.append("file", file, file.name);
+    }
+  
+    // Subir la carpeta a IPFS con wrap-with-directory=true para obtener un solo CID
+    const response = await fetch(`${this.apiUrl}/add?wrap-with-directory=true`, {
+      method: "POST",
+      body: formData,
+    });
+  
+    if (!response.ok) {
+      throw new Error("Error al subir la carpeta a IPFS");
+    }
+  
+    // Extraer el último CID de la respuesta (es el de la carpeta completa)
+    const responseText = await response.text();
+    const lines = responseText.trim().split("\n");
+    const lastLine = JSON.parse(lines[lines.length - 1]);
+  
+    //console.log(`\n📂 **Carpeta subida a IPFS**`);
+    //console.log(`📦 CID de la carpeta: ${lastLine.Hash}`);
+    //console.log(`🌍 Accede a los archivos en: http://127.0.0.1:8080/ipfs/${lastLine.Hash}`);
+  
+    return lastLine.Hash; // Retorna el CID
+  }
+  
+
+  async getFilesInDirectory(dirPath: string) {
+    const files = [];
+    for await (const entry of Deno.readDir(dirPath)) {
+      if (entry.isFile) {
+        const filePath = `${dirPath}/${entry.name}`;
+        const fileContent = await Deno.readFile(filePath);
+        const blob = new Blob([fileContent], { type: "application/octet-stream" });
+        files.push(new File([blob], entry.name));
+      }
+    }
+    return files;
+  }
 }
 
 // Exportar

@@ -8,6 +8,7 @@ import { dbConnectionMiddleware } from "./utils/Middleware.ts";
 
 import test from "./modules/configuration/test.ts";
 import home_admin from "./modules/admin/home_admin.ts";
+import Students from "./modules/students/students.ts";
 
 // Crear la aplicación
 const app = new Application();
@@ -48,6 +49,10 @@ app.use(login.allowedMethods());
 //--------------------------------------- Usar las rutas de Home Admin (home_admin.ts)
 app.use(home_admin.routes());
 app.use(home_admin.allowedMethods());
+
+//--------------------------------------- Usar las rutas de Students (students.ts)
+app.use(Students.routes());
+app.use(Students.allowedMethods());
 
 // Función para cargar la configuración desde el archivo JSON
 async function loadDatabaseConfig() {

@@ -1,7 +1,7 @@
 {
   "host_ipfs_node": "http://127.0.0.1:5001/api/v0",
   "host_blockchain_controller": "http://127.0.0.1:10000",
-  "addressWallet": "cx",
-  "alchemyApiKey": "xc",
-  "privateKey": "cx"
+  "addressWallet": "0xf1124AA59E28e824Bc029F82f342ACf31cC758d6",
+  "alchemyApiKey": "CmzuDPhJhVbqFMycjHhyhjzk6mkkk0LY",
+  "privateKey": "146664e43515e247b112d562e3aea99065d6d663ee293f637484db224d5aa146"
 }
